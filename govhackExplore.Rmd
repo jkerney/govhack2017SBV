@@ -1,0 +1,205 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## Code for govhack 2016
+## Small Business Viability
+## Justin Kerney, Ashleigh Latter, Chris Keane
+
+## This code uses Historical New Enterprise Incentive Scheme Business Level Data
+## And ABS Labour Force Data
+
+## Creates plots of likelihood of success based on industry, age, location
+## plus forecasts of industry size in 2020
+
+## Please excuse the quality of the code. Limited time & sleep.
+
+
+```{r}
+
+library(tidyverse)
+library(ggthemes)
+library(scales)
+library(stringr)
+
+```
+
+```{r}
+
+inputFile1 <- "/Users/jkerney/Desktop/govhack/neisdatagovhack.csv"
+inputFile2 <- "/Users/jkerney/Desktop/govhack/combined.csv"
+df <- read.csv(inputFile1)
+indData <- read.csv(inputFile2)
+
+```
+
+## Work out success rate for every combination of inputs
+```{r}
+## Inputs are
+## df - the neis data
+## user - vector describing user's characteristics
+
+## Outputs are 
+## successScore - score out of 10 for likelihood of success
+
+df2 <- df
+df2$year <- str_sub(df2$start_date,-2,9)
+df2 <- filter(df2, year %in% c(13:17))
+user <- c("retail_trade", "SA","0","40_44")
+
+df2$metro <- as.factor(df2$metro)
+
+df2 <- select(df2,
+             successful,
+             industry_type,
+             state,
+             metro,
+             age_group)
+
+## summarise success rates for each combination of variables
+resultsSummary <- group_by(df2, 
+                           industry_type,
+                           state,
+                           metro,
+                           age_group) %>%
+                  summarise(PercentSuccessful = sum(successful == "Y")/n(), Count = n())
+
+## Work out percentile
+resultsSummary <- arrange(resultsSummary, PercentSuccessful)
+resultsSummary$rank <- seq(1:nrow(resultsSummary))
+resultsSummary$Percentile <- resultsSummary$rank / nrow(resultsSummary) * 100
+
+userResult <- filter(resultsSummary, industry_type == user[1], 
+                        state == user[2], 
+                        metro == user[3],
+                        age_group == user[4])
+
+## Calculate the User's Success Score
+successScore <- round(userResult$Percentile/10, 0)
+print(successScore)
+
+## Create the dataframe for the first summary plot
+Groups <- c("Your Industry,\nState,\nAge Group,\nMetro\\Regional", "Your Industry", "Your Age Group", "Your State", "National")
+successPlotDf <- data.frame(group = Groups, successRate = rep(0,5))
+successPlotDf$group = factor(successPlotDf$group,levels(successPlotDf$group)[c(4,2,3,5,1)])
+
+## You Result
+userResult <- filter(resultsSummary, industry_type == user[1], 
+                        state == user[2], 
+                        metro == user[3],
+                        age_group == user[4])
+
+successPlotDf[1,]$successRate <- userResult$PercentSuccessful
+
+## Your Industry Result
+userResult <- filter(df2, industry_type == user[1]) %>%
+              summarise(PercentSuccessful = sum(successful == "Y")/n(), Count = n())
+
+successPlotDf[2,]$successRate <- userResult$PercentSuccessful
+
+## Your Age Group Result
+userResult <- filter(df2, age_group == user[4]) %>%
+              summarise(PercentSuccessful = sum(successful == "Y")/n(), Count = n())
+
+successPlotDf[3,]$successRate <- userResult$PercentSuccessful
+
+## Your State Result
+userResult <- filter(df2, state == user[2]) %>%
+              summarise(PercentSuccessful = sum(successful == "Y")/n(), Count = n())
+
+successPlotDf[4,]$successRate <- userResult$PercentSuccessful
+
+## National Result
+userResult <- summarise(df2, PercentSuccessful = sum(successful == "Y")/n(), Count = n())
+
+successPlotDf[5,]$successRate <- userResult$PercentSuccessful
+
+## Min growth
+minGrowth <- min(successPlotDf$successRate) - .05
+## Max growth
+maxGrowth <- max(successPlotDf$successRate) + .05
+
+## Success Rate
+ggplot(data=successPlotDf) +
+  geom_bar(mapping=aes(x=group, y=successRate, fill=rainbow(5)), stat="identity") +
+  theme_fivethirtyeight() +
+  scale_fill_discrete(guide=FALSE) +
+  labs(title="Success Rate of NEIS Small Businesses Owners\nSimilar to You, 2013-2017", caption="Data Source: Historical New Enterprise Incentive Scheme Business Level Data") +
+  scale_y_continuous(labels=percent) +
+  coord_cartesian(ylim=c(0,maxGrowth)) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.caption = element_text(size=7, face="italic"))
+
+## Your Industry
+successPlotInd <- filter(df2, state== user[2]) %>%
+                  group_by(industry_type) %>%
+                  summarise(PercentSuccessful = sum(successful == "Y")/n(), Count = n()) %>%
+                  arrange(PercentSuccessful)
+
+successPlotInd$niceIndustry <- "test"
+
+## Make industry names nicer
+successPlotInd[successPlotInd$industry_type == "electricity_gas_water",]$niceIndustry <- "Electricity, Gas & Water"
+successPlotInd[successPlotInd$industry_type == "other",]$niceIndustry <- "Other"
+successPlotInd[successPlotInd$industry_type == "transport",]$niceIndustry <- "Transport"
+successPlotInd[successPlotInd$industry_type == "finance_and_insurance",]$niceIndustry <- "Finance & Industry"
+successPlotInd[successPlotInd$industry_type == "retail_trade",]$niceIndustry <- "Retail/Trade"
+successPlotInd[successPlotInd$industry_type == "personal_and_other",]$niceIndustry <- "Personal & Other"
+successPlotInd[successPlotInd$industry_type == "health_and_community",]$niceIndustry <- "Health & Community"
+successPlotInd[successPlotInd$industry_type == "communication",]$niceIndustry <- "Communication"
+successPlotInd[successPlotInd$industry_type == "manufacturing",]$niceIndustry <- "Manufacturing"
+successPlotInd[successPlotInd$industry_type == "cultural_and_recreational",]$niceIndustry <- "Cultural & Recreactional"
+successPlotInd[successPlotInd$industry_type == "construction",]$niceIndustry <- "Construction"
+successPlotInd[successPlotInd$industry_type == "education",]$niceIndustry <- "Education"
+successPlotInd[successPlotInd$industry_type == "agriculture_forestry_fishing",]$niceIndustry <- "Agriculture, Forestry & Fishing"
+successPlotInd[successPlotInd$industry_type == "accommodation_cafes_restaurants",]$niceIndustry <- "Accomodation, Cafes, Restaurants"
+successPlotInd[successPlotInd$industry_type == "wholesale_trade",]$niceIndustry <- "Wholesale Trade"
+successPlotInd[successPlotInd$industry_type == "property_and_business",]$niceIndustry <- "Property & Business"
+
+temp <- select(successPlotInd, niceIndustry, PercentSuccessful) %>%
+        arrange(PercentSuccessful)
+
+successPlotInd <- within(successPlotInd, 
+                   niceIndustry <- factor(niceIndustry, 
+                                      levels=temp$niceIndustry))
+
+ggplot(data=successPlotInd) +
+  geom_bar(mapping=aes(x=niceIndustry, y=PercentSuccessful, fill=industry_type==user[1]), stat="identity") +
+  theme_fivethirtyeight() +
+  scale_fill_discrete(guide=FALSE) +
+  labs(title="Success Rate of NEIS\nSmall Businesses Owners\nBy Industry For Your State\n2013-2017", caption="Data Source: Historical New Enterprise Incentive Scheme Business Level Data") +
+  scale_y_continuous(labels=percent) +
+  coord_cartesian(ylim=c(0,maxGrowth)) +
+  #theme(plot.title = element_text(hjust = 0.5)) +
+  theme(plot.caption = element_text(size=7, face="italic")) +
+  coord_flip()
+
+```
+
+## Forecast Plots
+```{r}
+
+# get data for your industry
+indEmpDf <- select(indData, date, one_of(user[1]))
+colnames(indEmpDf) <- c("date","numPeople")
+indEmpDf$row <- 1:nrow(indEmpDf)
+indEmpDf$forecast <- indEmpDf$numPeople
+indEmpDf[1:41,]$forecast <- NA
+indEmpDf[42:nrow(indEmpDf),]$numPeople <- NA
+indEmpDf$month <- rep(c("05","08","11","02"), ceiling(nrow(indEmpDf)/4))[1:53]
+indEmpDf$year <- str_sub(indEmpDf$date, -2,6)
+indEmpDf$date <- paste("1", indEmpDf$month, indEmpDf$year, sep="-")
+indEmpDf$date <- as.Date(indEmpDf$date, format="%d-%m-%y")
+
+ggplot(data=indEmpDf) +
+  geom_line(mapping=aes(x=date,y=numPeople), colour="darkblue") +
+  geom_line(mapping=aes(x=date,y=forecast), colour="red", linetype="dashed") +
+  geom_vline(mapping=aes(xintercept = as.numeric(as.Date("2017-06-15", format="%Y-%m-%d"))), colour="red") +
+  theme_fivethirtyeight() +
+  labs(title="Your Industry's Forecasted Size in 2020", x="Year",y="Total Employment (thousands)", caption="Data Source: ABS Labour Force Region - SA4 Data") +
+  theme(plot.caption = element_text(size=7, face="italic"))
+
+```
+
+
