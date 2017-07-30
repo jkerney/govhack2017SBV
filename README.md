@@ -1,7 +1,11 @@
 ## Small Business Viability - GovHack 2017
 
 # Project Details
+
 This is a Shiny app, built for GovHack 2017, using Department of Employment Open Data (Historical New Enterprise Incentive Scheme Business Level Data) and ABS Open Data (Historical New Enterprise Incentive Scheme Business Level Data).
+
+Forecasts created using Rob Hyndman's R forecast library.
+
 
 # Project Description
 
